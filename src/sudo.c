@@ -411,6 +411,14 @@ static const char *allowed_env[] = {
     "ANDROID_BOOTLOGO",
     "ANDROID_SOCKET_*",
     "ANDROID_RUNTIME_ROOT",
+    "EMULATED_STORAGE_SOURCE",
+    "EMULATED_STORAGE_TARGET",
+    "LD_LIBRARY_PATH",
+    "LOOP_MOUNTPOINT",
+    "MARVELL_RW_DIR",
+    "NVM_ROOT_DIR",
+    "SECONDARY_STORAGE",
+    "ANDROID_PROPERTY_WORKSPACE"
     
     "HOME",
     "PATH",
@@ -430,6 +438,8 @@ static const char *allowed_env[] = {
     "SYSTEMSERVERCLASSPATH",
     "STANDALONE_SYSTEMSERVER_JARS",
     
+    
+
     "DISPLAY",
     "LANG",
     "LC_*",
