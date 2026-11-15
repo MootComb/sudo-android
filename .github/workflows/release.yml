@@ -1,0 +1,141 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm
+            output: sudo-arm
+          - arch: armv7
+            output: sudo-armv7
+          - arch: aarch64
+            output: sudo-aarch64
+          - arch: x86
+            output: sudo-x86
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            gcc-arm-linux-gnueabi \
+            gcc-arm-linux-gnueabihf \
+            gcc-aarch64-linux-gnu \
+            gcc-i686-linux-gnu \
+            make
+
+      - name: Make build script executable
+        run: chmod +x build.sh
+
+      - name: Build for ${{ matrix.arch }}
+        run: ./build.sh ${{ matrix.arch }}
+
+      - name: Verify binary
+        run: |
+          if [ ! -f sudo ]; then
+            echo "Error: sudo binary not found!"
+            exit 1
+          fi
+          file sudo
+          ls -la sudo
+
+      - name: Rename binary
+        run: |
+          cp sudo ${{ matrix.output }}
+          chmod 755 ${{ matrix.output }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output }}
+          path: ${{ matrix.output }}
+          retention-days: 7
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -type f -name 'sudo-*' -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum sudo-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create tarball per architecture
+        run: |
+          cd release
+          for f in sudo-*; do
+            if [ "$f" != "SHA256SUMS.txt" ]; then
+              tar -czf "${f}.tar.gz" "$f"
+            fi
+          done
+          ls -la
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release/sudo-*
+            release/SHA256SUMS.txt
+          body: |
+            ## sudo-android ${{ github.ref_name }}
+
+            Sudo implementation for Android 4.2.2+ (API 17+).
+
+            ### Downloads
+
+            | Architecture | Binary | Archive |
+            |--------------|--------|---------|
+            | ARM (32-bit) | `sudo-arm` | `sudo-arm.tar.gz` |
+            | ARMv7       | `sudo-armv7` | `sudo-armv7.tar.gz` |
+            | AArch64 (64-bit) | `sudo-aarch64` | `sudo-aarch64.tar.gz` |
+            | x86         | `sudo-x86` | `sudo-x86.tar.gz` |
+
+            ### Installation
+
+            ```bash
+            # Copy binary to device
+            adb push sudo-aarch64 /data/local/tmp/sudo
+            adb shell chmod 755 /data/local/tmp/sudo
+
+            # Start daemon (as root)
+            adb shell su -c "/data/local/tmp/sudo --daemon"
